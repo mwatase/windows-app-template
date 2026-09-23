@@ -1,4 +1,22 @@
+# Dependencies & build output
 node_modules/
 dist/
 target/
+src-tauri/gen/
+
+# OS noise
 .DS_Store
+Thumbs.db
+
+# SECRETS — never commit. Use GitHub Actions encrypted secrets instead.
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+.env
+.env.*
+!.env.example
+**/signing/
+tauri-updater-private.key*
