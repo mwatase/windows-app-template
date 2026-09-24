@@ -1,0 +1,28 @@
+{
+  // Build configuration and the maintenance scripts. These run in Node, never
+  // in the webview, so they get Node's types and none of the DOM's.
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "scripts/**/*.ts"],
+  // Interface code awaiting `npm run init`; tsconfig.app.json checks it.
+  "exclude": ["scripts/starter"]
+}

@@ -1,7 +1,10 @@
 # Windows Native App Template — Design
 
 **Date:** 2026-09-23
-**Status:** Awaiting review
+**Status:** Implemented. Typecheck, lint, 61 interface and script tests, 10 Rust
+tests and a production build pass; an installed build has updated itself end to
+end on Windows 10, and refused a tampered update. Section 13 records where the
+implementation departs from this design.
 **Repo:** `windows-app-template`
 
 ---
@@ -270,3 +273,103 @@ The template succeeds if all of the following hold:
    diagnostic output alone.
 6. An improvement made to the template can be pulled into a program built from
    it six months earlier without a merge conflict in `app/`.
+
+## 13. Implementation notes
+
+Written when the template was first built (2026-09-24). Everything above is the
+design as approved; this section records where the build departs from it, and
+what was verified.
+
+### Departures from the design
+
+1. **The chassis/app split extends to the native side.** Chassis commands live
+   in `src-tauri/src/chassis/` and are registered as an in-app Tauri plugin
+   named `chassis`, with their own permissions (declared in `build.rs`) and
+   their own generated bindings (`src/chassis/bindings.ts`). Program commands
+   live in `src-tauri/src/commands/` and generate `src/app/bindings.ts`.
+   Capabilities are split the same way: `chassis.json` and `app.json`. A
+   template change therefore never touches a file a program edits.
+2. **Logs are in `%LOCALAPPDATA%\<identifier>\logs`**, not
+   `%APPDATA%\<app>\logs` (§6). That is tauri-plugin-log's default: local
+   rather than roaming, so logs do not follow a roaming profile between
+   machines, and keyed by the identifier, which survives a rename. The active
+   file is `app.log`, rotated at 1 MB, with five kept.
+3. **The native title bar is kept.** §4 lists a titlebar under `shell/`. A
+   custom HTML title bar loses Windows 11 snap layouts and native
+   accessibility, so the shell supplies the sidebar and page headers instead,
+   and matches the frame to the light or dark theme.
+4. **The Content Security Policy allows inline styles.** sonner (toasts) and
+   Radix (select, scroll locking) insert `<style>` elements at runtime, so
+   `style-src` includes `'unsafe-inline'` and Tauri's nonce injection is turned
+   off for that one directive. Scripts are still restricted to `'self'`.
+5. **Update artifacts are produced only by releases.** They are enabled in
+   `src-tauri/tauri.release.conf.json`, which the release workflow merges in, so
+   local and CI builds need no signing key. The release workflow refuses to run
+   without the key, and refuses the template's placeholder public key.
+6. **Code signing (§7, §11).** Since June 2023, code-signing keys have to live
+   in hardware or a cloud HSM, so "adding secrets" usually means a cloud
+   signing command (`WINDOWS_SIGN_COMMAND`, for example Azure Artifact Signing)
+   rather than an exported `.pfx`. `scripts/sign-windows.ps1` supports both. §11
+   says an EV certificate clears SmartScreen immediately; Microsoft has since
+   said EV certificates no longer skip reputation building.
+   `docs/RELEASING.md` describes the current options.
+7. **Toolchain versions.** Built against Tauri 2.11, React 19.3, Vite 8,
+   Tailwind 4.3 and ESLint 10. TypeScript is pinned to 6.0, because
+   typescript-eslint does not support TypeScript 7 yet, and Vitest to 4,
+   because Vitest 5 requires Node 22. tauri-specta is still a release candidate
+   and is pinned exactly (`=2.0.0-rc.25`, with specta at the same version and
+   specta-typescript `=0.0.12`). tauri-plugin-http is held at 2.6: its crate
+   reached 2.7 before its npm package did, and the Tauri CLI refuses to build
+   when a plugin's crate and npm package disagree on major.minor.
+8. **Node 20.19 is the minimum** (§11 notes Node 20 on the Mac). Vite 8 and
+   ESLint 10 need 20.19 or later. Node 20 went out of support in April 2026, so
+   22 or 24 LTS is recommended.
+9. **`npm run init` keeps the git history.** Unlike the dashboard template's
+   setup script, it does not offer to replace it, because merging template
+   improvements (§4, criterion 6) depends on the shared history. It offers to
+   rename `origin` to `template` instead. It writes the updater key to
+   `~/.tauri/<identifier>.key`, prints the key's password once, and refuses to
+   overwrite an existing key.
+10. **Windows test binaries embed the application manifest.** Tauri embeds it in
+    the application executable only; test executables then load Common
+    Controls v5 and exit with STATUS_ENTRYPOINT_NOT_FOUND before any test runs.
+    `build.rs` passes the manifest to the linker for every binary instead.
+11. **Global shortcuts are wired in but unused.** The plugin is registered (§5)
+    with no permissions and no default shortcut: a system-wide shortcut the
+    program did not choose would collide with other software.
+    `docs/CUSTOMIZATION.md` shows how to add one.
+12. **Additions.** A "keep running in the tray" setting, read by the native side
+    when the window closes. A section on the chassis Settings page for the
+    program's own settings (`AppDefinition.settings`). In release builds, the
+    webview's context menu and its reload and print shortcuts are suppressed.
+
+### Verified
+
+On Windows 10 22H2:
+
+- `npm run verify`: `tsc -b`, ESLint including the chassis boundary rule, 61
+  Vitest tests (interface and scripts), `cargo fmt --check`, clippy with
+  `-D warnings`, and 10 Rust tests.
+- `npm run build`: a 3.1 MB NSIS installer, a 4.5 MB MSI, and a 9.8 MB
+  application.
+- The development and release builds, driven through the WebView2 debugging
+  protocol: the file dialog feeding a Rust command, an out-of-scope path being
+  refused, the GitHub API call, theme switching, keep-running-in-the-tray,
+  single instance, notifications, the diagnostic copy, the CSP in force, and
+  the context menu and F5 suppressed in release.
+- Criterion 1: `npm run init` on a copy took 17 seconds, and the result passes
+  `npm run verify`.
+- Criterion 4: an installed 0.1.0 refused a tampered 0.2.0 ("signature
+  verification failed") and kept running, then installed the genuine 0.2.0 and
+  restarted on it.
+- Criterion 5: "Copy diagnostic info" produces the build, OS, WebView2 version,
+  log path and recent log.
+- Criterion 6: a chassis change and dependency bumps in the template merged
+  into an initialised, modified program without conflicts.
+
+### Not yet verified
+
+- Criterion 2: development on macOS.
+- Criterion 3: the GitHub Actions workflows had not run when this was written.
+- Authenticode signing with a real certificate.
+- Launch at login, and dropping a file from Explorer, in an installed build.

@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "chassis",
+  "description": "What the template's own plumbing needs: settings, logging, diagnostics, updates, launch at login and the window theme. Owned by the template. A program adds its own permissions to app.json, never here.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-theme",
+    "chassis:default",
+    "log:default",
+    "store:default",
+    "updater:default",
+    "process:allow-restart",
+    "autostart:default"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "app",
+  "description": "What this program needs beyond the chassis. Widen it one permission at a time, deliberately: this software runs on machines belonging to other people.",
+  "windows": ["main"],
+  "permissions": []
+}
