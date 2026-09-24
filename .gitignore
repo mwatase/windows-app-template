@@ -3,6 +3,8 @@ node_modules/
 dist/
 target/
 src-tauri/gen/
+coverage/
+*.tsbuildinfo
 
 # OS noise
 .DS_Store

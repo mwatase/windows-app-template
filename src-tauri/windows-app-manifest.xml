@@ -1,0 +1,22 @@
+<!--
+  The Windows application manifest, embedded into every binary by build.rs.
+
+  Common Controls v6 is required by the native dialogs (tauri-plugin-dialog).
+  This is Tauri's default manifest, kept as a file so that build.rs can hand it
+  to the linker for test binaries too. To request administrator rights, add a
+  `trustInfo` block here - but a program distributed to strangers should not.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+</assembly>

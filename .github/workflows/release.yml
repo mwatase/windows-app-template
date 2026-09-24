@@ -1,0 +1,137 @@
+###############################################################################
+# Pushing a tag such as v1.2.3 releases that version to every installed copy.
+#
+#   1. Refuses a tag that disagrees with the version in the manifests.
+#   2. Refuses to run without the updater signing key, because installed
+#      copies reject any update that is not signed with it.
+#   3. Runs the same verification as CI. Nothing ships past a red test.
+#   4. Builds the NSIS installer and the MSI, signing them with Authenticode
+#      when signing secrets are configured, and skipping that cleanly when
+#      they are not.
+#   5. Signs the update packages with the updater key and publishes a GitHub
+#      Release with the installers and latest.json, the feed that installed
+#      copies check for updates.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   TAURI_SIGNING_PRIVATE_KEY           required  written by `npm run init`
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  required  printed by `npm run init`
+#   WINDOWS_SIGN_COMMAND                optional  a cloud signing command, %1 = file
+#   WINDOWS_CERTIFICATE                 optional  base64 .pfx, for a certificate that has one
+#   WINDOWS_CERTIFICATE_PASSWORD        optional  its password
+# docs/RELEASING.md explains the choice between the two signing options.
+###############################################################################
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Creating the release and uploading its assets.
+permissions:
+  contents: write
+
+# Two tags pushed together release one after the other, never interleaved.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build, sign and publish
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      WINDOWS_SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: The tag matches the version
+        run: npm run version:check -- "${{ github.ref_name }}"
+
+      - name: The updater is configured
+        shell: pwsh
+        run: |
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($config.plugins.updater.pubkey -like 'UPDATER_PUBLIC_KEY_NOT_CONFIGURED*') {
+            Write-Error 'The updater has no public key. Run `npm run init` before the first release.'
+            exit 1
+          }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            Write-Error 'The TAURI_SIGNING_PRIVATE_KEY secret is not set. Without it the update packages cannot be signed, and installed copies would refuse them. See docs/RELEASING.md.'
+            exit 1
+          }
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Interface tests
+        run: npm test
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # Adds a sign command to the build only when a signing secret exists.
+      # Without one the installers are published unsigned, which works but
+      # makes Windows SmartScreen warn the people installing them.
+      - name: Configure Authenticode signing
+        id: signing
+        shell: pwsh
+        run: |
+          if ($env:WINDOWS_SIGN_COMMAND -or $env:WINDOWS_CERTIFICATE) {
+            $script = (Resolve-Path scripts/sign-windows.ps1).Path
+            $config = @{ bundle = @{ windows = @{ signCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File `"$script`" `"%1`"" } } }
+            $path = Join-Path $env:RUNNER_TEMP 'signing.conf.json'
+            $config | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding utf8NoBOM
+            "args=--config `"$path`"" >> $env:GITHUB_OUTPUT
+            'Authenticode signing is configured.'
+          } else {
+            '::warning::No Authenticode signing secret is set, so the installers will be unsigned and SmartScreen will warn. See docs/RELEASING.md.'
+          }
+
+      - name: Build and publish the release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseBody: Download the installer below. Installed copies update themselves.
+          releaseDraft: false
+          prerelease: false
+          # The NSIS installer installs per user, so updating needs no
+          # administrator rights. The MSI is per machine and would.
+          updaterJsonPreferNsis: true
+          args: --config src-tauri/tauri.release.conf.json ${{ steps.signing.outputs.args }}

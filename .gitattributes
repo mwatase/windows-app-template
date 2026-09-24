@@ -1,0 +1,8 @@
+# One line ending everywhere. The template is edited on macOS and Windows, and
+# CI compares regenerated files (the TypeScript bindings) with what is
+# committed, so a checkout must not turn LF into CRLF behind anyone's back.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary

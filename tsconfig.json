@@ -1,0 +1,8 @@
+{
+  // Two programs with different globals: the interface (tsconfig.app.json,
+  // browser types) and the build tooling and scripts (tsconfig.node.json,
+  // Node types). This file only points at them, so editors and ESLint pick
+  // the right one for each file and `tsc -b` checks both.
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+}

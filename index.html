@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Paints the first frame in the OS theme before any CSS has loaded, so a
+         dark-mode user never sees a white flash while the webview starts. -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- Without an icon the webview asks for /favicon.ico and logs a 404. -->
+    <link rel="icon" type="image/png" href="/src-tauri/icons/32x32.png" />
+    <title>Windows App Template</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
